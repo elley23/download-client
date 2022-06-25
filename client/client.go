@@ -155,10 +155,8 @@ type Range struct {
 }
 
 type RangeData struct {
-	ID int `gorm:"primaryKey"`
-	//gorm.Model
-	Start int64
-	End   int64
+	ID     int   `gorm:"primaryKey"`
+	RangeD Range `gorm:"embedded"`
 }
 
 var chanRange chan Range
@@ -408,8 +406,8 @@ func WriteTheDownloadDesc() {
 	db.AutoMigrate(&RangeData{})
 
 	for rangeGet := range ChanDisc {
-		db.Create(&RangeData{Start: rangeGet.Start, End: rangeGet.End})
-
+		//db.Create(&RangeData{Start: rangeGet.Start, End: rangeGet.End})
+		db.Create(&RangeData{RangeD: rangeGet})
 		fmt.Printf("Insert the range to the database...Range is %d-%d\n", rangeGet.Start, rangeGet.End)
 	}
 	wg.Done()
@@ -429,21 +427,17 @@ func ReadTheDownloadDesc() (rangeArr []Range, err error) {
 
 	db.AutoMigrate(&RangeData{})
 
-	ranges := make([]Range, 1024)
-
-	var tmpRange RangeData
-	var i int = 1
-	for {
-		result := db.First(&tmpRange, i)
-		if result.Error != nil {
-			break
-		}
-		ranges[i-1].Start = tmpRange.Start
-		ranges[i-1].End = tmpRange.End
-		i++
+	rangeData := make([]RangeData, 1024)
+	result := db.Find(&rangeData)
+	if result.Error != nil {
+		return nil, result.Error
 	}
-	var rangeSlice = ranges[:i]
-	return rangeSlice, nil
+	ranges := make([]Range, result.RowsAffected)
+	for i := 0; int64(i) < result.RowsAffected; i++ {
+		ranges[i] = rangeData[i].RangeD
+	}
+
+	return ranges, nil
 }
 
 func RecordTheDownloadDescription(rangeGet *Range) {
