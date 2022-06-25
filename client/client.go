@@ -369,17 +369,7 @@ func SliceTheRanges(filesize int64) {
 	}
 
 	//sort the range
-	for i := 0; i < len(rangeSlice); i++ {
-		minIndex := i
-		for j := i + 1; j < len(rangeSlice); j++ {
-			if rangeSlice[j].Start < rangeSlice[minIndex].Start {
-				minIndex = j
-			}
-		}
-		if minIndex != i {
-			rangeSlice[minIndex], rangeSlice[i] = rangeSlice[i], rangeSlice[minIndex]
-		}
-	}
+	//从数据库取出来的时候已经排序了
 
 	var i int
 
@@ -428,7 +418,7 @@ func ReadTheDownloadDesc() (rangeArr []Range, err error) {
 	db.AutoMigrate(&RangeData{})
 
 	rangeData := make([]RangeData, 1024)
-	result := db.Find(&rangeData)
+	result := db.Order("Start").Find(&rangeData)
 	if result.Error != nil {
 		return nil, result.Error
 	}
