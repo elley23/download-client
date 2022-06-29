@@ -145,10 +145,14 @@ func downloadFileNoRange(filename string, url string) {
 }
 
 //////////////////////////////////////////
-/////////////////////////////////////////
-var wg = sync.WaitGroup{}
-
 //用channel实现多协程下载
+/////////////////////////////////////////
+
+type recorder interface {
+	write()
+	read() ([]Range, error)
+}
+
 type Range struct {
 	Start int64 `json:"start"`
 	End   int64 `json:"end"`
@@ -164,6 +168,7 @@ var ChanDisc chan Range
 var ChanSig chan struct{}
 
 //var eachRangeLen int64
+var wg = sync.WaitGroup{}
 var RangeSize int64
 var Goroutines int
 var ChanCnt int64
@@ -212,7 +217,9 @@ func downloadFileGoroutine(filename string, size int64, url string) {
 
 		//数据库的写入有个线程
 		wg.Add(1)
-		go WriteTheDownloadDesc()
+		//go WriteTheDownloadDesc()
+		var r RangeData
+		go r.write()
 
 		//把range切片,放进channel
 		SliceTheRanges(size)
@@ -287,6 +294,7 @@ func DownloadFileRange(rwLock *sync.RWMutex, url string, filename string, filesi
 			file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, os.ModePerm)
 			if err != nil {
 				HandleError(err, "os.OpenFile filename")
+
 				continue
 			}
 			file.Seek(seekStart, io.SeekStart)
@@ -313,7 +321,7 @@ func DownloadFileRange(rwLock *sync.RWMutex, url string, filename string, filesi
 		file.Close()
 
 		//在数据库记录下，下载情况
-		RecordTheDownloadDescription(&rangeGet)
+		ChanDisc <- Range{rangeGet.Start, rangeGet.Start + int64(n) - 1}
 	}
 	//wg.Done()
 
@@ -361,7 +369,9 @@ func SliceTheRanges(filesize int64) {
 
 	//从数据库读取range scope
 	var rangeSlice []Range
-	rangeSlice, err := ReadTheDownloadDesc()
+	//rangeSlice, err := ReadTheDownloadDesc()
+	var r RangeData
+	rangeSlice, err := r.read()
 	if err != nil {
 		fmt.Println("read database failure...")
 		SliceSizeToRange(0, filesize)
@@ -385,7 +395,8 @@ func SliceTheRanges(filesize int64) {
 	return
 }
 
-func WriteTheDownloadDesc() {
+//func WriteTheDownloadDesc() {
+func (r RangeData) write() {
 	dsn := Dir + "downloader.db"
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -403,7 +414,8 @@ func WriteTheDownloadDesc() {
 	wg.Done()
 }
 
-func ReadTheDownloadDesc() (rangeArr []Range, err error) {
+//func ReadTheDownloadDesc() (rangeArr []Range, err error) {
+func (r RangeData) read() (rangeArr []Range, err error) {
 	dsn := Dir + "downloader.db"
 	_, err = os.Open(dsn)
 	if err != nil {
@@ -428,8 +440,4 @@ func ReadTheDownloadDesc() (rangeArr []Range, err error) {
 	}
 
 	return ranges, nil
-}
-
-func RecordTheDownloadDescription(rangeGet *Range) {
-	ChanDisc <- *rangeGet
 }
